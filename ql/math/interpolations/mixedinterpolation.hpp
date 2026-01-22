@@ -10,7 +10,7 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <https://www.quantlib.org/license.shtml>.
+ <http://quantlib.org/license.shtml>.
 
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
@@ -26,13 +26,15 @@
 
 #include <ql/math/interpolations/linearinterpolation.hpp>
 #include <ql/math/interpolations/cubicinterpolation.hpp>
+#include <ql/math/interpolations/forwardflatinterpolation.hpp>
+#include <ql/math/interpolations/convexmonotoneinterpolation.hpp>
 #include <ql/utilities/dataformatters.hpp>
 
 namespace QuantLib {
 
     namespace detail {
 
-        template <class I1, class I2>
+        template<class I1, class I2, class Ia, class Ib>
         class MixedInterpolationImpl;
 
     }
@@ -68,14 +70,38 @@ namespace QuantLib {
                                       Real leftConditionValue,
                                       CubicInterpolation::BoundaryCondition rightC,
                                       Real rightConditionValue) {
-            impl_ = ext::make_shared<detail::MixedInterpolationImpl<I1, I2>>(
-                xBegin, xEnd, yBegin, n, behavior,
-                Linear(),
-                Cubic(da, monotonic,
-                      leftC, leftConditionValue,
-                      rightC, rightConditionValue));
+            impl_ = ext::shared_ptr<Interpolation::Impl>(new
+                detail::MixedInterpolationImpl<I1, I2, Linear, Cubic>(
+                    xBegin, xEnd, yBegin, n, behavior,
+                    Linear(),
+                    Cubic(da, monotonic,
+                          leftC, leftConditionValue,
+                          rightC, rightConditionValue)));
             impl_->update();
         }
+    };
+
+    class MixedFlatCubicInterpolation : public Interpolation {
+        public:
+            template <class I1, class I2>
+            MixedFlatCubicInterpolation(const I1& xBegin, const I1& xEnd,
+                                        const I2& yBegin, Size n,
+                                        MixedInterpolation::Behavior behavior,
+                                        CubicInterpolation::DerivativeApprox da,
+                                        bool monotonic,
+                                        CubicInterpolation::BoundaryCondition leftC,
+                                        Real leftConditionValue,
+                                        CubicInterpolation::BoundaryCondition rightC,
+                                        Real rightConditionValue) {
+                impl_ = ext::shared_ptr<Interpolation::Impl>(new
+                    detail::MixedInterpolationImpl<I1, I2, ForwardFlat, Cubic>(
+                        xBegin, xEnd, yBegin, n, behavior,
+                        ForwardFlat(),
+                        Cubic(da, monotonic,
+                            leftC, leftConditionValue,
+                            rightC, rightConditionValue)));
+                impl_->update();
+            }
     };
 
     //! mixed linear/cubic interpolation factory and traits
@@ -114,6 +140,96 @@ namespace QuantLib {
         bool monotonic_;
         CubicInterpolation::BoundaryCondition leftType_, rightType_;
         Real leftValue_, rightValue_;
+    };
+
+    //! mixed flat/cubic interpolation factory and traits
+    /*! \ingroup interpolations */
+    class MixedFlatCubic {
+      public:
+        MixedFlatCubic(Size n,
+                       MixedInterpolation::Behavior behavior,
+                       CubicInterpolation::DerivativeApprox da,
+                       bool monotonic = true,
+                       CubicInterpolation::BoundaryCondition leftCondition
+                           = CubicInterpolation::SecondDerivative,
+                       Real leftConditionValue = 0.0,
+                       CubicInterpolation::BoundaryCondition rightCondition
+                           = CubicInterpolation::SecondDerivative,
+                       Real rightConditionValue = 0.0)
+        : n_(n), behavior_(behavior), da_(da), monotonic_(monotonic),
+          leftType_(leftCondition), rightType_(rightCondition),
+          leftValue_(leftConditionValue), rightValue_(rightConditionValue) {}
+        template <class I1, class I2>
+        Interpolation interpolate(const I1& xBegin, const I1& xEnd,
+                                  const I2& yBegin) const {
+            return MixedFlatCubicInterpolation(xBegin, xEnd,
+                                               yBegin, n_, behavior_,
+                                               da_, monotonic_,
+                                               leftType_, leftValue_,
+                                               rightType_, rightValue_);
+        }
+        static const bool global = true;
+        static const Size requiredPoints = 3;
+      private:
+        Size n_;
+        MixedInterpolation::Behavior behavior_;
+        CubicInterpolation::DerivativeApprox da_;
+        bool monotonic_;
+        CubicInterpolation::BoundaryCondition leftType_, rightType_;
+        Real leftValue_, rightValue_;
+    };
+
+    //! mixed forward-flat/convex-monotone (Hagan-West) interpolation
+    /*! \ingroup interpolations
+        \warning See the Interpolation class for information about the
+                 required lifetime of the underlying data.
+    */
+    class MixedFlatConvexMonotoneInterpolation : public Interpolation {
+      public:
+        template <class I1, class I2>
+        MixedFlatConvexMonotoneInterpolation(const I1& xBegin, const I1& xEnd,
+                                             const I2& yBegin, Size n,
+                                             MixedInterpolation::Behavior behavior,
+                                             Real quadraticity = 0.3,
+                                             Real monotonicity = 0.7,
+                                             bool forcePositive = true) {
+            impl_ = ext::shared_ptr<Interpolation::Impl>(new
+                detail::MixedInterpolationImpl<I1, I2, ForwardFlat, ConvexMonotone>(
+                    xBegin, xEnd, yBegin, n, behavior,
+                    ForwardFlat(),
+                    ConvexMonotone(quadraticity, monotonicity, forcePositive)));
+            impl_->update();
+        }
+    };
+
+    //! mixed forward-flat/convex-monotone interpolation factory and traits
+    /*! \ingroup interpolations */
+    class MixedFlatConvexMonotone {
+      public:
+        MixedFlatConvexMonotone(Size n,
+                                MixedInterpolation::Behavior behavior,
+                                Real quadraticity = 0.3,
+                                Real monotonicity = 0.7,
+                                bool forcePositive = true)
+        : n_(n), behavior_(behavior), quadraticity_(quadraticity),
+          monotonicity_(monotonicity), forcePositive_(forcePositive) {}
+        template <class I1, class I2>
+        Interpolation interpolate(const I1& xBegin, const I1& xEnd,
+                                  const I2& yBegin) const {
+            return MixedFlatConvexMonotoneInterpolation(xBegin, xEnd,
+                                                        yBegin, n_, behavior_,
+                                                        quadraticity_,
+                                                        monotonicity_,
+                                                        forcePositive_);
+        }
+        static const bool global = true;
+        static const Size requiredPoints = 2;
+      private:
+        Size n_;
+        MixedInterpolation::Behavior behavior_;
+        Real quadraticity_;
+        Real monotonicity_;
+        bool forcePositive_;
     };
 
     // convenience classes
@@ -204,28 +320,28 @@ namespace QuantLib {
 
     namespace detail {
 
-        template <class I1, class I2>
+        template <class I1, class I2, class Interpolator1, class Interpolator2>
         class MixedInterpolationImpl
-            : public Interpolation::templateImpl<I1, I2> {
+            : public Interpolation::templateImpl<I1,I2> {
           public:
-            template <class Interpolator1, class Interpolator2>
             MixedInterpolationImpl(const I1& xBegin, const I1& xEnd,
                                    const I2& yBegin, Size n,
-                                   MixedInterpolation::Behavior behavior,
-                                   const Interpolator1& factory1,
-                                   const Interpolator2& factory2)
-            : Interpolation::templateImpl<I1, I2>(xBegin, xEnd, yBegin, 1) {
-                Size maxN = static_cast<Size>(xEnd - xBegin);
-                // SplitRanges needs xBegin2_+1 to be valid
-                if (behavior == MixedInterpolation::SplitRanges) {
-                    --maxN;
-                }
-                // This only checks that we pass valid iterators into interpolate()
-                // calls below. The calls themselves check requiredPoints for each
-                // of the segments.
-                QL_REQUIRE(n <= maxN, "n is too large (" << n << " > " << maxN << ")");
+                                   MixedInterpolation::Behavior behavior
+                                            = MixedInterpolation::ShareRanges,
+                                   const Interpolator1& factory1 = Interpolator1(),
+                                   const Interpolator2& factory2 = Interpolator2())
+            : Interpolation::templateImpl<I1,I2>(
+                               xBegin, xEnd, yBegin,
+                               std::max(Size(Interpolator1::requiredPoints),
+                                        Size(Interpolator2::requiredPoints))),
+              n_(n) {
 
-                xBegin2_ = this->xBegin_ + n;
+                xBegin2_ = this->xBegin_ + n_;
+                yBegin2_ = this->yBegin_ + n_;
+
+                QL_REQUIRE(xBegin2_<this->xEnd_,
+                           "too large n (" << n << ") for " <<
+                           this->xEnd_-this->xBegin_ << "-element x sequence");
 
                 switch (behavior) {
                   case MixedInterpolation::ShareRanges:
@@ -238,11 +354,11 @@ namespace QuantLib {
                     break;
                   case MixedInterpolation::SplitRanges:
                     interpolation1_ = factory1.interpolate(this->xBegin_,
-                                                           this->xBegin2_ + 1,
+                                                           this->xBegin2_+1,
                                                            this->yBegin_);
                     interpolation2_ = factory2.interpolate(this->xBegin2_,
                                                            this->xEnd_,
-                                                           this->yBegin_ + n);
+                                                           this->yBegin2_);
                     break;
                   default:
                     QL_FAIL("unknown mixed-interpolation behavior: " << behavior);
@@ -254,29 +370,32 @@ namespace QuantLib {
                 interpolation2_.update();
             }
             Real value(Real x) const {
-                if (x<*xBegin2_)
+                if (x<*(this->xBegin2_))
                     return interpolation1_(x, true);
                 return interpolation2_(x, true);
             }
             Real primitive(Real x) const {
-                if (x<*xBegin2_)
+                if (x<*(this->xBegin2_))
                     return interpolation1_.primitive(x, true);
                 return interpolation2_.primitive(x, true) -
                     interpolation2_.primitive(*xBegin2_, true) +
                     interpolation1_.primitive(*xBegin2_, true);
             }
             Real derivative(Real x) const {
-                if (x<*xBegin2_)
+                if (x<*(this->xBegin2_))
                     return interpolation1_.derivative(x, true);
                 return interpolation2_.derivative(x, true);
             }
             Real secondDerivative(Real x) const {
-                if (x<*xBegin2_)
+                if (x<*(this->xBegin2_))
                     return interpolation1_.secondDerivative(x, true);
                 return interpolation2_.secondDerivative(x, true);
             }
+            Size switchIndex() { return n_; }
           private:
             I1 xBegin2_;
+            I2 yBegin2_;
+            Size n_;
             Interpolation interpolation1_, interpolation2_;
         };
 
