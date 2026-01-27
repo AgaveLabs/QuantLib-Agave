@@ -27,6 +27,7 @@
 #include <ql/math/interpolations/linearinterpolation.hpp>
 #include <ql/math/interpolations/cubicinterpolation.hpp>
 #include <ql/math/interpolations/forwardflatinterpolation.hpp>
+#include <ql/math/interpolations/backwardflatinterpolation.hpp>
 #include <ql/math/interpolations/convexmonotoneinterpolation.hpp>
 #include <ql/utilities/dataformatters.hpp>
 
@@ -81,22 +82,45 @@ namespace QuantLib {
         }
     };
 
-    class MixedFlatCubicInterpolation : public Interpolation {
+    class MixedForwardFlatCubicInterpolation : public Interpolation {
         public:
             template <class I1, class I2>
-            MixedFlatCubicInterpolation(const I1& xBegin, const I1& xEnd,
-                                        const I2& yBegin, Size n,
-                                        MixedInterpolation::Behavior behavior,
-                                        CubicInterpolation::DerivativeApprox da,
-                                        bool monotonic,
-                                        CubicInterpolation::BoundaryCondition leftC,
-                                        Real leftConditionValue,
-                                        CubicInterpolation::BoundaryCondition rightC,
-                                        Real rightConditionValue) {
+            MixedForwardFlatCubicInterpolation(const I1& xBegin, const I1& xEnd,
+                                               const I2& yBegin, Size n,
+                                               MixedInterpolation::Behavior behavior,
+                                               CubicInterpolation::DerivativeApprox da,
+                                               bool monotonic,
+                                               CubicInterpolation::BoundaryCondition leftC,
+                                               Real leftConditionValue,
+                                               CubicInterpolation::BoundaryCondition rightC,
+                                               Real rightConditionValue) {
                 impl_ = ext::shared_ptr<Interpolation::Impl>(new
                     detail::MixedInterpolationImpl<I1, I2, ForwardFlat, Cubic>(
                         xBegin, xEnd, yBegin, n, behavior,
                         ForwardFlat(),
+                        Cubic(da, monotonic,
+                            leftC, leftConditionValue,
+                            rightC, rightConditionValue)));
+                impl_->update();
+            }
+    };
+
+    class MixedBackwardFlatCubicInterpolation : public Interpolation {
+        public:
+            template <class I1, class I2>
+            MixedBackwardFlatCubicInterpolation(const I1& xBegin, const I1& xEnd,
+                                                const I2& yBegin, Size n,
+                                                MixedInterpolation::Behavior behavior,
+                                                CubicInterpolation::DerivativeApprox da,
+                                                bool monotonic,
+                                                CubicInterpolation::BoundaryCondition leftC,
+                                                Real leftConditionValue,
+                                                CubicInterpolation::BoundaryCondition rightC,
+                                                Real rightConditionValue) {
+                impl_ = ext::shared_ptr<Interpolation::Impl>(new
+                    detail::MixedInterpolationImpl<I1, I2, BackwardFlat, Cubic>(
+                        xBegin, xEnd, yBegin, n, behavior,
+                        BackwardFlat(),
                         Cubic(da, monotonic,
                             leftC, leftConditionValue,
                             rightC, rightConditionValue)));
@@ -142,31 +166,68 @@ namespace QuantLib {
         Real leftValue_, rightValue_;
     };
 
-    //! mixed flat/cubic interpolation factory and traits
+    //! mixed forward-flat/cubic interpolation factory and traits
     /*! \ingroup interpolations */
-    class MixedFlatCubic {
+    class MixedForwardFlatCubic {
       public:
-        MixedFlatCubic(Size n,
-                       MixedInterpolation::Behavior behavior,
-                       CubicInterpolation::DerivativeApprox da,
-                       bool monotonic = true,
-                       CubicInterpolation::BoundaryCondition leftCondition
-                           = CubicInterpolation::SecondDerivative,
-                       Real leftConditionValue = 0.0,
-                       CubicInterpolation::BoundaryCondition rightCondition
-                           = CubicInterpolation::SecondDerivative,
-                       Real rightConditionValue = 0.0)
+        MixedForwardFlatCubic(Size n,
+                              MixedInterpolation::Behavior behavior,
+                              CubicInterpolation::DerivativeApprox da,
+                              bool monotonic = true,
+                              CubicInterpolation::BoundaryCondition leftCondition
+                                  = CubicInterpolation::SecondDerivative,
+                              Real leftConditionValue = 0.0,
+                              CubicInterpolation::BoundaryCondition rightCondition
+                                  = CubicInterpolation::SecondDerivative,
+                              Real rightConditionValue = 0.0)
         : n_(n), behavior_(behavior), da_(da), monotonic_(monotonic),
           leftType_(leftCondition), rightType_(rightCondition),
           leftValue_(leftConditionValue), rightValue_(rightConditionValue) {}
         template <class I1, class I2>
         Interpolation interpolate(const I1& xBegin, const I1& xEnd,
                                   const I2& yBegin) const {
-            return MixedFlatCubicInterpolation(xBegin, xEnd,
-                                               yBegin, n_, behavior_,
-                                               da_, monotonic_,
-                                               leftType_, leftValue_,
-                                               rightType_, rightValue_);
+            return MixedForwardFlatCubicInterpolation(xBegin, xEnd,
+                                                      yBegin, n_, behavior_,
+                                                      da_, monotonic_,
+                                                      leftType_, leftValue_,
+                                                      rightType_, rightValue_);
+        }
+        static const bool global = true;
+        static const Size requiredPoints = 3;
+      private:
+        Size n_;
+        MixedInterpolation::Behavior behavior_;
+        CubicInterpolation::DerivativeApprox da_;
+        bool monotonic_;
+        CubicInterpolation::BoundaryCondition leftType_, rightType_;
+        Real leftValue_, rightValue_;
+    };
+
+    //! mixed backward-flat/cubic interpolation factory and traits
+    /*! \ingroup interpolations */
+    class MixedBackwardFlatCubic {
+      public:
+        MixedBackwardFlatCubic(Size n,
+                               MixedInterpolation::Behavior behavior,
+                               CubicInterpolation::DerivativeApprox da,
+                               bool monotonic = true,
+                               CubicInterpolation::BoundaryCondition leftCondition
+                                   = CubicInterpolation::SecondDerivative,
+                               Real leftConditionValue = 0.0,
+                               CubicInterpolation::BoundaryCondition rightCondition
+                                   = CubicInterpolation::SecondDerivative,
+                               Real rightConditionValue = 0.0)
+        : n_(n), behavior_(behavior), da_(da), monotonic_(monotonic),
+          leftType_(leftCondition), rightType_(rightCondition),
+          leftValue_(leftConditionValue), rightValue_(rightConditionValue) {}
+        template <class I1, class I2>
+        Interpolation interpolate(const I1& xBegin, const I1& xEnd,
+                                  const I2& yBegin) const {
+            return MixedBackwardFlatCubicInterpolation(xBegin, xEnd,
+                                                       yBegin, n_, behavior_,
+                                                       da_, monotonic_,
+                                                       leftType_, leftValue_,
+                                                       rightType_, rightValue_);
         }
         static const bool global = true;
         static const Size requiredPoints = 3;
@@ -184,15 +245,15 @@ namespace QuantLib {
         \warning See the Interpolation class for information about the
                  required lifetime of the underlying data.
     */
-    class MixedFlatConvexMonotoneInterpolation : public Interpolation {
+    class MixedForwardFlatConvexMonotoneInterpolation : public Interpolation {
       public:
         template <class I1, class I2>
-        MixedFlatConvexMonotoneInterpolation(const I1& xBegin, const I1& xEnd,
-                                             const I2& yBegin, Size n,
-                                             MixedInterpolation::Behavior behavior,
-                                             Real quadraticity = 0.3,
-                                             Real monotonicity = 0.7,
-                                             bool forcePositive = true) {
+        MixedForwardFlatConvexMonotoneInterpolation(const I1& xBegin, const I1& xEnd,
+                                                    const I2& yBegin, Size n,
+                                                    MixedInterpolation::Behavior behavior,
+                                                    Real quadraticity = 0.3,
+                                                    Real monotonicity = 0.7,
+                                                    bool forcePositive = true) {
             impl_ = ext::shared_ptr<Interpolation::Impl>(new
                 detail::MixedInterpolationImpl<I1, I2, ForwardFlat, ConvexMonotone>(
                     xBegin, xEnd, yBegin, n, behavior,
@@ -202,25 +263,78 @@ namespace QuantLib {
         }
     };
 
+    //! mixed backward-flat/convex-monotone (Hagan-West) interpolation
+    /*! \ingroup interpolations
+        \warning See the Interpolation class for information about the
+                 required lifetime of the underlying data.
+    */
+    class MixedBackwardFlatConvexMonotoneInterpolation : public Interpolation {
+      public:
+        template <class I1, class I2>
+        MixedBackwardFlatConvexMonotoneInterpolation(const I1& xBegin, const I1& xEnd,
+                                                     const I2& yBegin, Size n,
+                                                     MixedInterpolation::Behavior behavior,
+                                                     Real quadraticity = 0.3,
+                                                     Real monotonicity = 0.7,
+                                                     bool forcePositive = true) {
+            impl_ = ext::shared_ptr<Interpolation::Impl>(new
+                detail::MixedInterpolationImpl<I1, I2, BackwardFlat, ConvexMonotone>(
+                    xBegin, xEnd, yBegin, n, behavior,
+                    BackwardFlat(),
+                    ConvexMonotone(quadraticity, monotonicity, forcePositive)));
+            impl_->update();
+        }
+    };
+
     //! mixed forward-flat/convex-monotone interpolation factory and traits
     /*! \ingroup interpolations */
-    class MixedFlatConvexMonotone {
+    class MixedForwardFlatConvexMonotone {
       public:
-        MixedFlatConvexMonotone(Size n,
-                                MixedInterpolation::Behavior behavior,
-                                Real quadraticity = 0.3,
-                                Real monotonicity = 0.7,
-                                bool forcePositive = true)
+        MixedForwardFlatConvexMonotone(Size n,
+                                       MixedInterpolation::Behavior behavior,
+                                       Real quadraticity = 0.3,
+                                       Real monotonicity = 0.7,
+                                       bool forcePositive = true)
         : n_(n), behavior_(behavior), quadraticity_(quadraticity),
           monotonicity_(monotonicity), forcePositive_(forcePositive) {}
         template <class I1, class I2>
         Interpolation interpolate(const I1& xBegin, const I1& xEnd,
                                   const I2& yBegin) const {
-            return MixedFlatConvexMonotoneInterpolation(xBegin, xEnd,
-                                                        yBegin, n_, behavior_,
-                                                        quadraticity_,
-                                                        monotonicity_,
-                                                        forcePositive_);
+            return MixedForwardFlatConvexMonotoneInterpolation(xBegin, xEnd,
+                                                               yBegin, n_, behavior_,
+                                                               quadraticity_,
+                                                               monotonicity_,
+                                                               forcePositive_);
+        }
+        static const bool global = true;
+        static const Size requiredPoints = 2;
+      private:
+        Size n_;
+        MixedInterpolation::Behavior behavior_;
+        Real quadraticity_;
+        Real monotonicity_;
+        bool forcePositive_;
+    };
+
+    //! mixed backward-flat/convex-monotone interpolation factory and traits
+    /*! \ingroup interpolations */
+    class MixedBackwardFlatConvexMonotone {
+      public:
+        MixedBackwardFlatConvexMonotone(Size n,
+                                        MixedInterpolation::Behavior behavior,
+                                        Real quadraticity = 0.3,
+                                        Real monotonicity = 0.7,
+                                        bool forcePositive = true)
+        : n_(n), behavior_(behavior), quadraticity_(quadraticity),
+          monotonicity_(monotonicity), forcePositive_(forcePositive) {}
+        template <class I1, class I2>
+        Interpolation interpolate(const I1& xBegin, const I1& xEnd,
+                                  const I2& yBegin) const {
+            return MixedBackwardFlatConvexMonotoneInterpolation(xBegin, xEnd,
+                                                                yBegin, n_, behavior_,
+                                                                quadraticity_,
+                                                                monotonicity_,
+                                                                forcePositive_);
         }
         static const bool global = true;
         static const Size requiredPoints = 2;
