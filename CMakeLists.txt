@@ -148,6 +148,11 @@ if (NOT DEFINED Boost_USE_STATIC_RUNTIME)
     set(Boost_USE_STATIC_RUNTIME ${MSVC})
 endif()
 
+# Force CMake to use import libraries instead of DLLs on Windows
+if (MSVC)
+    set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
+endif()
+
 if (NOT DEFINED QL_BOOST_VERSION)
     # Boost 1.75.0 or greater required for compiling with C++20
     if (CMAKE_CXX_STANDARD GREATER_EQUAL 20)
@@ -161,7 +166,8 @@ if (CMAKE_CXX_COMPILER STREQUAL "icpx")
     find_package(IntelDPCPP REQUIRED)
 endif()
 
-find_package(Boost ${QL_BOOST_VERSION} REQUIRED)
+# Use CONFIG mode for Boost to work with modern CMake and vcpkg
+find_package(Boost ${QL_BOOST_VERSION} CONFIG REQUIRED)
 
 # Do not warn about Boost versions higher than 1.58.0
 set(Boost_NO_WARN_NEW_VERSIONS ON)

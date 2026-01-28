@@ -25,7 +25,7 @@
 #ifdef QL_ENABLE_PARALLEL_UNIT_TEST_RUNNER
 #include "paralleltestrunner.hpp"
 #else
-#include <boost/test/included/unit_test.hpp>
+#include <boost/test/unit_test.hpp>
 #endif
 
 /* Use BOOST_MSVC instead of _MSC_VER since some other vendors (Metrowerks,

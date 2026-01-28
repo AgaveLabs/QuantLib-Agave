@@ -1,3 +1,8 @@
+# Find Boost unit_test_framework for test suite
+if (QL_BUILD_TEST_SUITE)
+    find_package(Boost ${QL_BOOST_VERSION} CONFIG REQUIRED COMPONENTS unit_test_framework)
+endif()
+
 set(QL_TEST_SOURCES
     americanoption.cpp
     amortizingbond.cpp
@@ -183,35 +188,95 @@ set(QL_TEST_HEADERS
     utilities.hpp
 )
 
-
 if (QL_BUILD_TEST_SUITE)
-    add_library(ql_test OBJECT ${QL_TEST_SOURCES} ${QL_TEST_HEADERS})
-    if (NOT Boost_USE_STATIC_LIBS)
-        target_compile_definitions(ql_test PUBLIC BOOST_ALL_DYN_LINK)
-    endif()
-    if(MSVC AND CMAKE_UNITY_BUILD)
-        # for Unity builds, we need to add /bigobj
+
+    # Object library with all test sources
+    add_library(ql_test OBJECT
+        ${QL_TEST_SOURCES}
+        ${QL_TEST_HEADERS}
+    )
+
+    # Unity builds on MSVC need /bigobj
+    if (MSVC AND CMAKE_UNITY_BUILD)
         target_compile_options(ql_test PUBLIC "/bigobj")
     endif()
-    target_link_libraries(ql_test PUBLIC ql_library ${QL_THREAD_LIBRARIES})
 
+    # Link core QuantLib library + threading
+    target_link_libraries(ql_test PUBLIC
+        ql_library
+        ${QL_THREAD_LIBRARIES}
+    )
 
+    # ============================================================
+    # Test suite executable
+    # ============================================================
     add_executable(ql_test_suite quantlibtestsuite.cpp)
-    set_source_files_properties(quantlibtestsuite.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION true)
-    set_target_properties(ql_test_suite PROPERTIES OUTPUT_NAME "quantlib-test-suite")
-    target_link_libraries(ql_test_suite PRIVATE ql_test) 
+
+    set_source_files_properties(
+        quantlibtestsuite.cpp
+        PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
+    )
+
+    set_target_properties(
+        ql_test_suite
+        PROPERTIES OUTPUT_NAME "quantlib-test-suite"
+    )
+
+    # Link test objects + Boost.Test
+    target_link_libraries(ql_test_suite PRIVATE
+        ql_test
+        Boost::unit_test_framework
+    )
+
+    # Boost from vcpkg is built as DLL, so we need to define DYN_LINK
+    target_compile_definitions(ql_test_suite PRIVATE
+        BOOST_ALL_DYN_LINK
+        BOOST_TEST_DYN_LINK
+    )
+    target_compile_definitions(ql_test PRIVATE
+        BOOST_ALL_DYN_LINK
+        BOOST_TEST_DYN_LINK
+    )
+
+    add_test(
+        NAME quantlib_test_suite
+        COMMAND ql_test_suite --log_level=message
+    )
+
+    # ============================================================
+    # Benchmark executable
+    # ============================================================
+    add_executable(ql_benchmark quantlibbenchmark.cpp)
+
+    set_target_properties(
+        ql_benchmark
+        PROPERTIES OUTPUT_NAME "quantlib-benchmark"
+    )
+
+    target_link_libraries(ql_benchmark PRIVATE
+        ql_test
+        Boost::unit_test_framework
+    )
+
+    target_compile_definitions(ql_benchmark PRIVATE
+        BOOST_ALL_DYN_LINK
+        BOOST_TEST_DYN_LINK
+    )
 
     if (QL_INSTALL_TEST_SUITE)
-        install(TARGETS ql_test_suite RUNTIME DESTINATION ${QL_INSTALL_BINDIR})
+        install(
+            TARGETS ql_test_suite
+            RUNTIME DESTINATION ${QL_INSTALL_BINDIR}
+        )
     endif()
-    add_test(NAME quantlib_test_suite COMMAND ql_test_suite --log_level=message)
 
-
-    add_executable(ql_benchmark quantlibbenchmark.cpp)
-    set_target_properties(ql_benchmark PROPERTIES OUTPUT_NAME "quantlib-benchmark")
-    target_link_libraries(ql_benchmark PRIVATE ql_test)
     if (QL_INSTALL_BENCHMARK)
-        install(TARGETS ql_benchmark RUNTIME DESTINATION ${QL_INSTALL_BINDIR})
+        install(
+            TARGETS ql_benchmark
+            RUNTIME DESTINATION ${QL_INSTALL_BINDIR}
+        )
     endif()
+
 endif()
+
 
