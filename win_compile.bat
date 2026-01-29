@@ -1,5 +1,8 @@
 @echo off
 
+:: Configuration
+set DEV_ROOT=C:\Users\BenoitPinguet\dev
+
 :: Check for administrator privileges
 net session >nul 2>&1
 if %errorlevel% neq 0 (
@@ -40,9 +43,22 @@ if exist build (
     )
 )
 
+set VCPKG_ROOT=%DEV_ROOT%\vcpkg
+set VCPKG_TOOLCHAIN=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake
+
+if not exist "%VCPKG_TOOLCHAIN%" (
+    echo ERROR: vcpkg toolchain file not found at: %VCPKG_TOOLCHAIN%
+    echo Please verify your vcpkg installation path.
+    exit /b 1
+)
+
 cmake -S . -B build -G "Visual Studio 18 2026" -A x64 ^
+  -DCMAKE_TOOLCHAIN_FILE=%VCPKG_TOOLCHAIN% ^
+  -DVCPKG_TARGET_TRIPLET=x64-windows ^
   -DBUILD_SHARED_LIBS=OFF ^
-  -DCMAKE_TOOLCHAIN_FILE="C:\Users\BenoitPinguet\dev\vcpkg\scripts\buildsystems\vcpkg.cmake"
+  -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL ^
+  -DCMAKE_INSTALL_PREFIX=%DEV_ROOT%\QuantLib-Agave\ql-install
+
 cmake --build build --config Release --target install
 
 :: Clean up old build directory if it exists
